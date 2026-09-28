@@ -1,8 +1,9 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useResponsiveLayout } from "@/hooks/use-responsive";
-import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 type PecaItem = {
   id: string;
@@ -121,6 +122,41 @@ export default function PecasScreen() {
   const colors = Colors[colorScheme];
   const { pagePadding, contentMaxWidth, titleSize, bodyTextSize, isCompact } = useResponsiveLayout();
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("Todas");
+  const [isCartReady, setIsCartReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem("@ford-fiap/store/cart")
+      .then((storedCart) => {
+        if (!active || !storedCart) return;
+        const parsedCart: unknown = JSON.parse(storedCart);
+        if (parsedCart && typeof parsedCart === "object" && !Array.isArray(parsedCart)) {
+          const validCart = Object.fromEntries(Object.entries(parsedCart).filter(([id, quantity]) =>
+            pecas.some((item) => item.id === id) && Number.isInteger(quantity) && Number(quantity) > 0
+          )) as Record<string, number>;
+          setCart(validCart);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setIsCartReady(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (isCartReady) AsyncStorage.setItem("@ford-fiap/store/cart", JSON.stringify(cart)).catch(() => undefined);
+  }, [cart, isCartReady]);
+
+  const categories = useMemo(() => ["Todas", ...Array.from(new Set(pecas.map((item) => item.categoria)))], []);
+  const visibleParts = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+    return pecas.filter((item) => {
+      const matchesCategory = category === "Todas" || item.categoria === category;
+      const matchesSearch = !normalizedSearch || `${item.nome} ${item.categoria} ${item.compatibilidade}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+      return matchesCategory && matchesSearch;
+    });
+  }, [category, search]);
 
   const cartItems = useMemo(() => {
     return pecas
@@ -158,6 +194,16 @@ export default function PecasScreen() {
       maximumFractionDigits: 0,
     }).format(value);
 
+  const handleCheckout = () => {
+    if (totalItems === 0) {
+      Alert.alert("Carrinho vazio", "Adicione pelo menos um item antes de continuar.");
+      return;
+    }
+    Alert.alert("Pedido registrado", `Seu pedido demonstrativo com ${totalItems} item(ns), no total de ${formatCurrency(total)}, foi registrado neste dispositivo.`, [
+      { text: "OK", onPress: () => setCart({}) },
+    ]);
+  };
+
   const productColumns = isCompact ? 1 : 2;
 
   return (
@@ -183,9 +229,38 @@ export default function PecasScreen() {
           </View>
         </View>
 
+        <View style={styles.filters}>
+          <TextInput
+            accessibilityLabel="Buscar peças"
+            style={[styles.searchInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+            placeholder="Buscar peça, categoria ou modelo"
+            placeholderTextColor={colors.mutedText}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryList}
+            data={categories}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: category === item }}
+                onPress={() => setCategory(item)}
+                style={[styles.categoryChip, { backgroundColor: category === item ? colors.tint : colors.surface, borderColor: colors.border }]}
+              >
+                <Text style={[styles.categoryChipText, { color: category === item ? "#fff" : colors.text }]}>{item}</Text>
+              </Pressable>
+            )}
+          />
+        </View>
+
         <FlatList
           contentContainerStyle={styles.listContent}
-          data={pecas}
+          data={visibleParts}
           keyExtractor={(item) => item.id}
           numColumns={productColumns}
           columnWrapperStyle={productColumns > 1 ? styles.columnGap : undefined}
@@ -239,10 +314,16 @@ export default function PecasScreen() {
 
               <Pressable
                 style={({ pressed }) => [styles.checkoutButton, { backgroundColor: colors.tint, opacity: pressed ? 0.92 : 1 }]}
-                onPress={() => alert(totalItems > 0 ? `Compra simulada de ${totalItems} item(ns).` : 'Adicione produtos ao carrinho primeiro.')}
+                onPress={handleCheckout}
               >
                 <Text style={styles.checkoutButtonText}>{totalItems > 0 ? 'Finalizar compra' : 'Adicionar itens para comprar'}</Text>
               </Pressable>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={[styles.cartCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Nenhuma peça encontrada</Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.mutedText }]}>Tente outro termo ou selecione a categoria “Todas”.</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -335,6 +416,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, lineHeight: 34, fontWeight: "800", letterSpacing: -0.5 },
   subtitle: { fontSize: 15, lineHeight: 22 },
   listContent: { gap: 12, paddingBottom: 24 },
+  filters: { gap: 10, marginBottom: 4 },
+  searchInput: { minHeight: 48, borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, fontSize: 15 },
+  categoryList: { gap: 8, paddingVertical: 2 },
+  categoryChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9 },
+  categoryChipText: { fontSize: 13, fontWeight: '700' },
   columnGap: { gap: 12 },
   card: {
     padding: 16,

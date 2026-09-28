@@ -3,7 +3,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useResponsiveLayout } from "@/hooks/use-responsive";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function HomeScreen() {
   const [marca, setMarca] = useState("");
@@ -50,9 +50,13 @@ export default function HomeScreen() {
   ];
 
   const handleSubmit = () => {
+    if (!modelo.trim()) {
+      Alert.alert("Informe um modelo", "Digite o modelo Ford que deseja consultar.");
+      return;
+    }
     router.push({
       pathname: "/specs",
-      params: { marca, modelo, versao, atributos },
+      params: { marca: marca.trim(), modelo: modelo.trim(), versao: versao.trim(), atributos: atributos.trim() },
     });
   };
 

@@ -18,9 +18,16 @@ export default function SpecsScreen() {
     nome?: string;
   }>();
 
-  const searchKey = [nome, modelo].find((value) => typeof value === "string" && value.length > 0) as
-    | keyof typeof carrosData
-    | undefined;
+  const modelQuery = [nome, modelo].find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
+  const normalizedModelQuery = modelQuery?.toLocaleLowerCase("pt-BR");
+  const searchKey = normalizedModelQuery
+    ? (Object.keys(carrosData) as (keyof typeof carrosData)[]).find((key) => {
+        const entry = carrosData[key];
+        return key.toLocaleLowerCase("pt-BR") === normalizedModelQuery ||
+          entry.modelo.toLocaleLowerCase("pt-BR") === normalizedModelQuery ||
+          key.toLocaleLowerCase("pt-BR").replace(/^ford\s+/, "") === normalizedModelQuery;
+      })
+    : undefined;
   const dados = searchKey ? carrosData[searchKey] : null;
   const atributosManuais =
     typeof atributos === "string" && atributos.length > 0

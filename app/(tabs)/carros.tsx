@@ -1,9 +1,9 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useResponsiveLayout } from "@/hooks/use-responsive";
-import { carrosCatalogo } from "./carrosData";
 import { useRouter } from "expo-router";
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { carrosCatalogo } from "./carrosData";
 
 export default function CarrosScreen() {
   const router = useRouter();
